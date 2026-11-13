@@ -6,8 +6,9 @@ vi.mock('@/hermes', () => ({
   saveHermesConfig: vi.fn(async () => undefined)
 }))
 
+import { getAudioContext } from '@/lib/audio-context'
 import { $hapticsMuted } from '@/store/haptics'
-import { $thinkingSoundEnabled } from '@/store/voice-prefs'
+import { $beepVolume, $thinkingSoundEnabled } from '@/store/voice-prefs'
 
 import { isThinkingSoundActive, startThinkingSound, stopThinkingSound } from './thinking-sound'
 
@@ -25,6 +26,7 @@ class FakeGain {
 }
 
 const started: FakeOscillator[] = []
+const gains: FakeGain[] = []
 
 class FakeAudioContext {
   currentTime = 0
@@ -40,7 +42,11 @@ class FakeAudioContext {
   }
 
   createGain() {
-    return new FakeGain()
+    const gain = new FakeGain()
+
+    gains.push(gain)
+
+    return gain
   }
 
   resume() {
@@ -52,7 +58,9 @@ describe('thinking-sound', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     started.length = 0
+    gains.length = 0
     $thinkingSoundEnabled.set(true)
+    $beepVolume.set(0.3)
     vi.mocked($hapticsMuted.get).mockReturnValue(false)
     vi.stubGlobal('AudioContext', FakeAudioContext)
   })
@@ -114,5 +122,66 @@ describe('thinking-sound', () => {
       vi.advanceTimersByTime(2_000)
     }).not.toThrow()
     stopThinkingSound()
+  })
+
+  // The owner never heard the old 0.08 peak on speakers. Peak is now
+  // 0.1 + 0.4 × voice.beep_volume: 0.22 at the backend default 0.3.
+  const peakOfFirstBlip = () => {
+    startThinkingSound()
+    vi.advanceTimersByTime(1_000)
+
+    return gains[0]?.gain.exponentialRampToValueAtTime.mock.calls[0]?.[0] as number | undefined
+  }
+
+  it('peaks at least 0.2 at the default voice.beep_volume', () => {
+    expect(peakOfFirstBlip()).toBeGreaterThanOrEqual(0.2)
+  })
+
+  it('scales the peak with voice.beep_volume', () => {
+    $beepVolume.set(1)
+    expect(peakOfFirstBlip()).toBeCloseTo(0.5, 5)
+  })
+
+  it('plays nothing when voice.beep_volume is 0 (explicit silence)', () => {
+    $beepVolume.set(0)
+    startThinkingSound()
+    vi.advanceTimersByTime(3_000)
+    expect(started.length).toBe(0)
+  })
+
+  it('logs one debug line when sounds are muted, not one per blip', () => {
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
+
+    vi.mocked($hapticsMuted.get).mockReturnValue(true)
+    startThinkingSound()
+    vi.advanceTimersByTime(6_000)
+
+    expect(debug).toHaveBeenCalledTimes(1)
+    expect(String(debug.mock.calls[0][0])).toMatch(/thinking-sound.*muted/i)
+    debug.mockRestore()
+  })
+
+  it('resumes a suspended AudioContext on the next user gesture and reports the state', () => {
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
+    const resume = vi.spyOn(FakeAudioContext.prototype, 'resume')
+
+    // The shared context is a module singleton: suspend the live instance.
+    Object.assign(getAudioContext() as object, { state: 'suspended' })
+
+    startThinkingSound()
+    vi.advanceTimersByTime(1_000)
+
+    expect(String(debug.mock.calls.at(-1)?.[0])).toMatch(/thinking-sound.*suspended/i)
+
+    resume.mockClear()
+    window.dispatchEvent(new Event('pointerdown'))
+    expect(resume).toHaveBeenCalledTimes(1)
+
+    // One-shot: a second gesture does not resume again.
+    window.dispatchEvent(new Event('pointerdown'))
+    expect(resume).toHaveBeenCalledTimes(1)
+    Object.assign(getAudioContext() as object, { state: 'running' })
+    debug.mockRestore()
+    resume.mockRestore()
   })
 })

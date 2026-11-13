@@ -11,11 +11,15 @@ import { isVoiceStopCommand } from '@/lib/voice-stop-word'
 import {
   $bargeInEnabled,
   $bargeInThresholdMultiplier,
+  $beepVolume,
+  $toolAckEnabled,
   $voiceSilenceMs,
   $voiceStopPhrase,
   $voiceStopPhraseConfig,
   applyBargeInEnabledFromConfig,
   applyBargeInThresholdFromConfig,
+  applyBeepVolumeFromConfig,
+  applyToolAckFromConfig,
   applyVoiceSilenceMsFromConfig,
   applyVoiceStopPhraseFromConfig
 } from './voice-prefs'
@@ -240,5 +244,64 @@ describe('applyVoiceSilenceMsFromConfig', () => {
       applyVoiceSilenceMsFromConfig({ voice: { silence_duration: raw } }, backendDefault)
       expect($voiceSilenceMs.get()).toBe(1_250)
     }
+  })
+})
+
+// `voice.beep_volume` scales the synthesized UI blips (thinking sound). The
+// backend default is 0.3 (hermes_cli/config_defaults.py); only a finite value
+// inside [0, 1] is adopted — 0 is legitimate silence, anything else falls back.
+describe('applyBeepVolumeFromConfig', () => {
+  it('adopts a configured volume in [0, 1], including silence', () => {
+    applyBeepVolumeFromConfig({ voice: { beep_volume: 0.6 } })
+    expect($beepVolume.get()).toBe(0.6)
+
+    applyBeepVolumeFromConfig({ voice: { beep_volume: 0 } })
+    expect($beepVolume.get()).toBe(0)
+
+    applyBeepVolumeFromConfig({ voice: { beep_volume: 1 } })
+    expect($beepVolume.get()).toBe(1)
+  })
+
+  it('absent, out-of-range, or malformed values keep the backend default 0.3', () => {
+    for (const voice of [
+      undefined,
+      {},
+      { beep_volume: null },
+      { beep_volume: '' },
+      { beep_volume: 'loud' },
+      { beep_volume: true },
+      { beep_volume: -0.1 },
+      { beep_volume: 1.5 }
+    ]) {
+      applyBeepVolumeFromConfig({ voice: { beep_volume: 0.6 } })
+      applyBeepVolumeFromConfig({ voice })
+      expect($beepVolume.get()).toBe(0.3)
+    }
+
+    applyBeepVolumeFromConfig(null)
+    expect($beepVolume.get()).toBe(0.3)
+  })
+})
+
+// `voice.tool_ack` — spoken "one moment" when a voice turn starts using tools.
+// Default on; only an explicit false disables it (same gate shape as barge_in).
+describe('applyToolAckFromConfig', () => {
+  it('disables only an explicit false', () => {
+    applyToolAckFromConfig({ voice: { tool_ack: false } })
+    expect($toolAckEnabled.get()).toBe(false)
+
+    applyToolAckFromConfig({ voice: { tool_ack: true } })
+    expect($toolAckEnabled.get()).toBe(true)
+  })
+
+  it('absent, null, or malformed values keep the acknowledgement on', () => {
+    for (const voice of [undefined, {}, { tool_ack: null }, { tool_ack: 'no' }, { tool_ack: 0 }]) {
+      applyToolAckFromConfig({ voice: { tool_ack: false } })
+      applyToolAckFromConfig({ voice })
+      expect($toolAckEnabled.get()).toBe(true)
+    }
+
+    applyToolAckFromConfig(null)
+    expect($toolAckEnabled.get()).toBe(true)
   })
 })

@@ -219,6 +219,7 @@ export function useComposerVoice({
   const wakePauseBarrierRef = useRef<Promise<void> | null>(null)
 
   const chainedConversation = useVoiceConversation({
+    activeToolLabel,
     busy,
     consumePendingResponse,
     enabled: voiceConversationActive && !liveEngineActive,

@@ -1219,6 +1219,7 @@ DEFAULT_CONFIG = {
         "beep_enabled": True,  # record start/stop beeps in CLI voice mode
         "beep_volume": 0.3,  # beep amplitude multiplier, 0.0-1.0
         "thinking_sound": True,  # ambient bubble sound while the agent works (volume = beep_volume)
+        "tool_ack": True,  # Desktop voice chat: say one short "one moment" when the turn first uses a tool
         "silence_threshold": 200,  # RMS below this = silence (0-32767)
         "silence_duration": 3.0,  # seconds of silence before auto-stop
         "barge_in": True,  # interrupt the agent / stop TTS when the user starts talking

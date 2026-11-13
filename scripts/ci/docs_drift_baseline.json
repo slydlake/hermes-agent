@@ -128,7 +128,6 @@
   "vault.bitwarden.binary_path",
   "vault.onepassword.binary_path",
   "voice.gpt_live.model",
-  "voice.thinking_sound",
   "wake_word.sherpa.model_dir",
   "x_search.reasoning_effort"
  ],
