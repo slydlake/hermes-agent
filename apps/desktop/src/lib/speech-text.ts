@@ -19,11 +19,12 @@ const THINKING_PREFIX_RE =
 const URL_RE = /\bhttps?:\/\/\S+/gi
 
 // --- Identifier-dense tokens (#119207) --------------------------------------
-// Filenames with extensions, hashes, UUIDs, dense model/version IDs and paths
-// are read character-by-character ("peyton-sample-20260922.wav" becomes
-// "peyton dash sample dash two zero two six..."), making clean audio sound
-// corrupted. They become silence, never a hardcoded English placeholder word
-// (#86602: the reply may be in any language). Mirrored token-for-token by
+// Filenames with extensions, hashes, UUIDs, dense model/version IDs, paths,
+// IPv4 addresses (optionally :port) and lowercase digit-hyphen hostnames
+// ("pve-3") are read character-by-character ("peyton-sample-20260922.wav"
+// becomes "peyton dash sample dash two zero two six..."), making clean audio
+// sound corrupted. They become silence, never a hardcoded English placeholder
+// word (#86602: the reply may be in any language). Mirrored token-for-token by
 // tools/tts_text_normalize.py (`prune_identifier_tokens_for_tts`) — keep both
 // in lockstep and extend the shared corpus
 // (tests/fixtures/identifier_speech_corpus.json) first.
@@ -35,6 +36,11 @@ const HASH_PREFIX_HEX_RE = /\b(?:sha(?:-?256|-?512|-?1|3)?|blake2[ab]?|md5|crc32
 const HEX_RUN_RE = /[0-9a-fA-F]{7,64}/
 const IDENTIFIER_TOKEN_RE = /[A-Za-z0-9_./~@-]+/g
 const DATE_TOKEN_RE = /^\d{4}[-/]\d{1,2}(?:[-/]\d{1,2})?$/
+// IPv4 addresses (optionally :port) are read digit by digit — silence them.
+// Octets validate 0-255, so three-component versions (1.2.3) and out-of-range
+// quads (999.1.1.1) stay. The port rides along in the same match because the
+// identifier token charset has no ':'. Mirrored in tts_text_normalize.py (_IPV4_RE).
+const IPV4_RE = /(?<![\d.])(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?::\d{1,5})?(?!\.?\d)/g
 
 function isDenseIdentifier(token: string): boolean {
   if (token.includes('@') || DATE_TOKEN_RE.test(token)) {
@@ -70,12 +76,19 @@ function isDenseIdentifier(token: string): boolean {
     return true // v2.1.0-beta.3, Llama-3.3-70B, dated filename slugs
   }
 
+  // Lowercase digit+hyphen tokens are machine names ("pve-3", "node-01");
+  // uppercase ones ("COVID-19", "GPT-4") are words and stay spoken.
+  if (hyphens >= 1 && token === token.toLowerCase()) {
+    return true
+  }
+
   return token.includes('/') || (hyphens >= 1 && seps >= 1)
 }
 
 function pruneIdentifierTokens(text: string): string {
   return text
     .replace(HASH_PREFIX_HEX_RE, ' ')
+    .replace(IPV4_RE, ' ')
     .replace(IDENTIFIER_TOKEN_RE, token => (isDenseIdentifier(token) ? ' ' : token))
 }
 

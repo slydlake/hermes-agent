@@ -130,11 +130,12 @@ def normalize_symbols_for_tts(text: str) -> str:
 
 
 # --- Identifier-dense tokens (#119207) ---------------------------------------
-# Filenames with extensions, hashes, UUIDs, dense model/version IDs and paths
-# are read character-by-character ("peyton-sample-20260922.wav" becomes
-# "peyton dash sample dash two zero two six..."), making clean synthesized
-# audio sound corrupted. They become silence, never a hardcoded English
-# placeholder word (#86602: the reply may be in any language). Ordinary
+# Filenames with extensions, hashes, UUIDs, dense model/version IDs, paths,
+# IPv4 addresses (optionally :port) and lowercase digit-hyphen hostnames
+# ("pve-3") are read character-by-character ("peyton-sample-20260922.wav"
+# becomes "peyton dash sample dash two zero two six..."), making clean
+# synthesized audio sound corrupted. They become silence, never a hardcoded
+# English placeholder word (#86602: the reply may be in any language). Ordinary
 # prose, dates, ratios and short hyphenated words (COVID-19, well-known)
 # pass through untouched. Mirrored token-for-token by
 # apps/desktop/src/lib/speech-text.ts — keep both in lockstep and extend the
@@ -151,6 +152,13 @@ _HASH_PREFIX_HEX_RE = re.compile(
 _HEX_RUN_RE = re.compile(r"(?<![0-9a-fA-F])[0-9a-fA-F]{7,64}(?![0-9a-fA-F])")
 _IDENTIFIER_TOKEN_RE = re.compile(r"[A-Za-z0-9_./~@-]+")
 _DATE_TOKEN_RE = re.compile(r"\d{4}[-/]\d{1,2}(?:[-/]\d{1,2})?")
+# IPv4 addresses (optionally :port) are read digit by digit — silence them.
+# Octets validate 0-255, so three-component versions (1.2.3) and out-of-range
+# quads (999.1.1.1) stay. The port rides along in the same match because the
+# identifier token charset has no ':'. Mirrored in speech-text.ts (IPV4_RE).
+_IPV4_OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+_IPV4_RE = re.compile(
+    r"(?<![\d.])" + _IPV4_OCTET + r"(?:\." + _IPV4_OCTET + r"){3}(?::\d{1,5})?(?!\.?\d)")
 
 
 def _is_dense_identifier(token: str) -> bool:
@@ -174,6 +182,10 @@ def _is_dense_identifier(token: str) -> bool:
     hyphens = token.count("-")
     if seps >= 2 or hyphens >= 2:
         return True  # v2.1.0-beta.3, Llama-3.3-70B, dated filename slugs
+    # Lowercase digit+hyphen tokens are machine names ("pve-3", "node-01");
+    # uppercase ones ("COVID-19", "GPT-4") are words and stay spoken.
+    if hyphens >= 1 and token == token.lower():
+        return True
     return "/" in token or (hyphens >= 1 and seps >= 1)
 
 
@@ -182,6 +194,7 @@ def prune_identifier_tokens_for_tts(text: str) -> str:
     if not text:
         return ""
     text = _HASH_PREFIX_HEX_RE.sub(" ", text)
+    text = _IPV4_RE.sub(" ", text)
     return _IDENTIFIER_TOKEN_RE.sub(
         lambda m: " " if _is_dense_identifier(m.group(0)) else m.group(0), text)
 
