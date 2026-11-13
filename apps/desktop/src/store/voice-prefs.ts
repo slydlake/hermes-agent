@@ -165,6 +165,30 @@ export function applyThinkingSoundFromConfig(
   $thinkingSoundEnabled.set(config?.voice?.thinking_sound !== false)
 }
 
+// `voice.beep_volume` — amplitude of the synthesized UI blips (thinking sound),
+// 0.0–1.0 with backend default 0.3 (hermes_cli/config_defaults.py). 0 is
+// legitimate silence; absent/out-of-range/malformed keeps the default.
+const BACKEND_BEEP_VOLUME_DEFAULT = 0.3
+export const $beepVolume = atom<number>(BACKEND_BEEP_VOLUME_DEFAULT)
+
+/** Seed the blip volume from a loaded config payload. */
+export function applyBeepVolumeFromConfig(config: ConfigPayload) {
+  const raw = voiceValue(config, 'beep_volume')
+  // Only numbers and non-empty numeric strings coerce — null/true/'' must not
+  // become 0 (silence) through Number(); they fall back to the default.
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN
+  $beepVolume.set(Number.isFinite(value) && value >= 0 && value <= 1 ? value : BACKEND_BEEP_VOLUME_DEFAULT)
+}
+
+// `voice.tool_ack` — one short spoken "one moment" when a voice turn first
+// starts using tools (default on; only an explicit false disables it).
+export const $toolAckEnabled = atom<boolean>(true)
+
+/** Seed the tool-acknowledgement gate from a loaded config payload. */
+export function applyToolAckFromConfig(config: ConfigPayload) {
+  $toolAckEnabled.set(voiceValue(config, 'tool_ack') !== false)
+}
+
 /** Persist even an unchanged value, so migrating false is also one-time. */
 export async function setAutoSpeakReplies(enabled: boolean): Promise<void> {
   storeAutoSpeak(enabled, false)

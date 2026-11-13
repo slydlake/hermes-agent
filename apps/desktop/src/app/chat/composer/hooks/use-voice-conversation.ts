@@ -18,7 +18,13 @@ import { isVoiceStopCommand } from '@/lib/voice-stop-word'
 import { isTtsEcho } from '@/lib/voice-tts-echo'
 import { notify, notifyError } from '@/store/notifications'
 import { $voicePlayback } from '@/store/voice-playback'
-import { $autoSpeakReplies, $bargeInEnabled, $bargeInThresholdMultiplier, $voiceSilenceMs } from '@/store/voice-prefs'
+import {
+  $autoSpeakReplies,
+  $bargeInEnabled,
+  $bargeInThresholdMultiplier,
+  $toolAckEnabled,
+  $voiceSilenceMs
+} from '@/store/voice-prefs'
 
 import { useComposerScope } from '../scope'
 
@@ -27,7 +33,17 @@ import { feedVoiceConversationSpeech, type PendingVoiceResponse } from './voice-
 
 export type ConversationStatus = 'idle' | 'listening' | 'transcribing' | 'thinking' | 'speaking'
 
+/** Spoken once per voice turn when the first tool starts, so the wait is not
+ *  silent. Fixed list: a pre-chosen short phrase needs no model round trip. */
+export const TOOL_ACK_PHRASES = ['Ich schau mal kurz nach.', 'Moment, ich prüf das.'] as const
+
+/** How often to look for a started tool while the turn is 'thinking'. */
+const TOOL_ACK_POLL_MS = 200
+
 interface VoiceConversationOptions {
+  /** The tool the agent is running right now, or null. Drives the one-per-turn
+   *  spoken acknowledgement (`voice.tool_ack`). */
+  activeToolLabel?: () => null | string
   busy: boolean
   enabled: boolean
   onFatalError?: () => void
@@ -74,6 +90,7 @@ const METER_FAILURE_MIN_CLIP_MS = 750
 const METER_FAILURE_LIMIT = 2
 
 export function useVoiceConversation({
+  activeToolLabel,
   busy,
   enabled,
   onFatalError,
@@ -131,6 +148,15 @@ export function useVoiceConversation({
   // created it and would otherwise hold that stale submit forever. Read the
   // latest callback at call time, mirroring `onInterruptRef` (#123357).
   const onSubmitRef = useRef(onSubmit)
+  const activeToolLabelRef = useRef(activeToolLabel)
+  // One acknowledgement per turn: set when it is spoken, cleared with the turn's
+  // speech session (dropSpeechSession runs at every submit and turn end).
+  const toolAckedRef = useRef(false)
+
+  // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
+  useEffect(() => {
+    activeToolLabelRef.current = activeToolLabel
+  }, [activeToolLabel])
 
   // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
   useEffect(() => {
@@ -210,6 +236,7 @@ export function useVoiceConversation({
     speechSessionRef.current = null
     responseIdRef.current = null
     spokenSourceLengthRef.current = 0
+    toolAckedRef.current = false
   }
 
   const handleTurn = useCallback(
@@ -1043,6 +1070,32 @@ export function useVoiceConversation({
     stopThinkingSound()
 
     return undefined
+  }, [enabled, muted, status])
+
+  // Spoken acknowledgement: the first tool of a turn starts while status is
+  // 'thinking' and nothing is audible yet. Say one short phrase (once per turn,
+  // not per tool). syncOnly keeps it on the plain POST path, so barge-in and
+  // Stop cut it like any other playback; a failure is only logged.
+  // eslint-disable-next-line no-restricted-syntax -- turn-coordination ref (once-per-turn latch), not an atom mirror
+  useEffect(() => {
+    if (!enabled || muted || status !== 'thinking') {
+      return undefined
+    }
+
+    const timer = window.setInterval(() => {
+      if (toolAckedRef.current || !$toolAckEnabled.get() || !activeToolLabelRef.current?.()) {
+        return
+      }
+
+      toolAckedRef.current = true
+      const phrase = TOOL_ACK_PHRASES[Math.floor(Math.random() * TOOL_ACK_PHRASES.length)]
+
+      playSpeechText(phrase, { ...ownerRef.current, source: 'voice-conversation', syncOnly: true }).catch(error =>
+        console.debug('[voice] tool acknowledgement failed', error)
+      )
+    }, TOOL_ACK_POLL_MS)
+
+    return () => window.clearInterval(timer)
   }, [enabled, muted, status])
 
   // Drive the loop: when a voice-submitted reply appears, open a live speech
