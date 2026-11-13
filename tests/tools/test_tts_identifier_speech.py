@@ -67,3 +67,32 @@ def test_dates_and_ratios_are_not_identifiers():
     spoken = prepare_spoken_text("Due 2026/06/02; the score was 3:2.")
     assert "2026/06/02" in spoken
     assert "3:2" in spoken
+
+
+def test_ipv4_addresses_with_and_without_port_are_silent():
+    for address in ("192.168.178.13", "192.168.178.13:9100"):
+        spoken = prepare_spoken_text(f"The node is at {address} right now.")
+        assert "192.168.178.13" not in spoken, address
+        assert "9100" not in spoken, address
+        assert "The node is at" in spoken and "right now" in spoken
+
+
+def test_ipv4_rule_validates_octets_and_leaves_versions_alone():
+    spoken = prepare_spoken_text("Invalid 999.1.1.1 and version 1.2.3 stay.")
+    assert "999.1.1.1" in spoken
+    assert "1.2.3" in spoken
+
+
+def test_lowercase_digit_hyphen_hostnames_are_silent():
+    spoken = prepare_spoken_text("Host pve-3 answered the check.")
+    assert "pve-3" not in spoken
+    assert "Host" in spoken and "answered the check" in spoken
+
+
+def test_plain_names_and_uppercase_digit_words_stay_spoken():
+    # Acceptance: 'pve3' (no hyphen), 'Node-Exporter' (no digit) and 'Mai 2026'
+    # are unchanged; uppercase digit+hyphen words (COVID-19, GPT-4) are not
+    # hostnames and stay spoken.
+    assert prepare_spoken_text("pve3 and Node-Exporter im Mai 2026") == "pve3 and Node-Exporter im Mai 2026"
+    spoken = prepare_spoken_text("COVID-19 and GPT-4 stay spoken.")
+    assert "COVID-19" in spoken and "GPT-4" in spoken

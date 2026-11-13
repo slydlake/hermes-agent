@@ -76,7 +76,7 @@ async def test_voice_turn_is_admitted_and_scoped_to_its_own_turn(tmp_path, monke
     """A spoken voice-mode turn (TUI/Desktop ``voice_turn``) rides canonical admission to the turn
     that runs on ``auxiliary.voice_chat``; the next typed turn stays on the main model."""
     from gateway.session_controls import AuthorityConnection
-    from gateway.session_surface import surface_turn_note, surface_voice_turn
+    from gateway.session_surface import VOICE_TURN_NOTE, surface_turn_note, surface_voice_turn
     from hermes_state_runtime import list_session_admissions
 
     seen = []
@@ -101,7 +101,7 @@ async def test_voice_turn_is_admitted_and_scoped_to_its_own_turn(tmp_path, monke
     rows = {row['request_id']: row for row in list_session_admissions(authority.db, session_id='s', pending_only=False)}
     assert rows['spoken']['payload']['surface_v1'] == {'voice_turn': True}
     assert 'surface_v1' not in rows['typed']['payload'] and 'bad' not in rows
-    assert seen == [('spoken', True, ''), ('typed', False, '')]
+    assert seen == [('spoken', True, VOICE_TURN_NOTE), ('typed', False, '')]
 
 def _admissions(home):
     with closing(sqlite3.connect(f'file:{home / "state.db"}?mode=ro', uri=True)) as db:
@@ -185,6 +185,7 @@ def test_managed_worker_turn_carries_the_committed_surface_to_the_model(tmp_path
     """The same committed surface reaches the model from a managed child (N2): live-voice note and
     spoken context on the user message, ``voice_turn`` on ``auxiliary.voice_chat``, and the following
     typed turn carries neither."""
+    from gateway.session_surface import VOICE_TURN_NOTE
     from tools.voice_live import VOICE_LIVE_TURN_NOTE
 
     root = Path(__file__).resolve().parents[2]
@@ -241,6 +242,7 @@ def test_managed_worker_turn_carries_the_committed_surface_to_the_model(tmp_path
     assert set(turns) == {'voice', 'spoken', 'plain'}, turns
     assert VOICE_LIVE_TURN_NOTE in turns['voice'][1] and 'UNIQUE_PRIOR_CONTEXT' in turns['voice'][1]
     assert turns['spoken'][0] == 'voice-model', 'a committed voice turn runs on auxiliary.voice_chat'
+    assert VOICE_TURN_NOTE in turns['spoken'][1], 'the spoken-turn note crosses the worker boundary'
     assert turns['plain'] == ('main-model', 'PLAIN_TURN'), 'the following typed turn carries no surface'
     # The voice route rewrites only its own request's model identity; main-model turns share one prefix.
     assert len({r['messages'][0]['content'] for r in model.requests if r['model'] == 'main-model'}) == 1

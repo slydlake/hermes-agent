@@ -1,5 +1,5 @@
 {
-  "description": "Identifier-dense tokens both speech normalizers must agree on (#119207). Unspeakable machine tokens become silence — never hardcoded English placeholder words (#86602). identifier_tokens: [text, mustNotContain[], mustContain[]] — prose around a replaced token must survive. pass_through_tokens: [text, mustContain[]] — ordinary speech must pass verbatim.",
+  "description": "Identifier-dense tokens both speech normalizers must agree on (#119207). Unspeakable machine tokens become silence — never hardcoded English placeholder words (#86602). identifier_tokens: [text, mustNotContain[], mustContain[]] — prose around a replaced token must survive. pass_through_tokens: [text, mustContain[]] — ordinary speech must pass verbatim. IPv4 decision: a dotted quad with octets 0-255 (optionally :port, 1-5 digits) is silence on both sides; three-component versions (1.2.3) and out-of-range quads (999.1.1.1) are not IPv4 and stay. Hostname decision: a LOWERCASE token with a digit and a hyphen (pve-3, node-01) is a machine name and becomes silence; uppercase digit+hyphen words (COVID-19, GPT-4) stay spoken, and digit-only names without a hyphen (pve3) stay spoken.",
   "identifier_tokens": [
     ["Saved peyton-sample-20260922.wav and peyton-sample-20260922.ogg.", ["peyton", "20260922", ".wav", ".ogg"], ["Saved", "and"]],
     ["The digest is sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 for the file.", ["e3b0c442", "7852b855", "sha256:"], ["The digest is", "for the file"]],
@@ -7,7 +7,11 @@
     ["Trace id 550e8400-e29b-41d4-a716-446655440000 appears once.", ["550e8400", "446655440000"], ["Trace id", "appears once"]],
     ["Model meta-llama/Llama-3.3-70B-Instruct is large.", ["meta-llama/Llama-3.3-70B-Instruct", "70B"], ["Model", "is large"]],
     ["Config at ~/.config/hermes/config.yaml was read.", ["config.yaml", "~/.config"], ["Config at", "was read"]],
-    ["Version v2.1.0-beta.3 shipped.", ["v2.1.0-beta.3"], ["Version", "shipped"]]
+    ["Version v2.1.0-beta.3 shipped.", ["v2.1.0-beta.3"], ["Version", "shipped"]],
+    ["The exporter listens on 192.168.178.13:9100 today.", ["192.168.178.13", "9100"], ["The exporter listens on", "today"]],
+    ["Ping 192.168.178.13 from the gateway.", ["192.168.178.13"], ["Ping", "from the gateway"]],
+    ["Broadcast 10.0.0.255 is reserved.", ["10.0.0.255"], ["Broadcast", "is reserved"]],
+    ["Host pve-3 answered the check.", ["pve-3"], ["Host", "answered the check"]]
   ],
   "pass_through_tokens": [
     ["The samples played cleanly, so listen again.", [], ["The samples played cleanly, so listen again"]],
@@ -15,6 +19,9 @@
     ["Email me at user@example.com.", [], ["user@example.com"]],
     ["COVID-19 and well-known facts stay.", [], ["COVID-19", "well-known"]],
     ["Due 2026/06/02 and status N/A here.", [], ["2026/06/02", "N/A"]],
-    ["The final score was 3:2.", [], ["3:2"]]
+    ["The final score was 3:2.", [], ["3:2"]],
+    ["Version 1.2.3 and 999.1.1.1 are not IPv4 addresses.", [], ["1.2.3", "999.1.1.1"]],
+    ["pve3 and Node-Exporter im Mai 2026", [], ["pve3 and Node-Exporter im Mai 2026"]],
+    ["COVID-19 and GPT-4 stay spoken.", [], ["COVID-19", "GPT-4"]]
   ]
 }

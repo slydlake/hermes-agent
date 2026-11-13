@@ -66,10 +66,25 @@ def _voice_live_note(committed, valid_tool_names):
 
 _SURFACE_NOTES = {'hud': _hud_note, 'voice-live': _voice_live_note}
 
+# Per-turn note for a chained voice-chat turn (``voice_turn``): the reply is read aloud directly
+# by TTS, so it must be written as speech. Same seam as the HUD / live-voice notes — it rides the
+# user message, never the frozen system prompt.
+VOICE_TURN_NOTE = (
+    "[Note: this message comes from a spoken voice conversation and your reply will be read aloud "
+    "by a text-to-speech voice. Answer in the user's language (German by default), in short spoken "
+    "sentences. No markdown, no lists, no tables, no code. Never read out URLs, IP addresses, "
+    "hashes or file paths; name the machine instead, for example 'der Server im Heimnetz'. Keep it "
+    "brief, a few sentences unless the user asked for detail. Before your first tool call of this "
+    "turn, say one short sentence such as 'Ich schau mal kurz nach.' All narration stays in the "
+    "user's language, never English. Do the work with your tools as usual; only the final facts "
+    "need to be spoken. Do not claim an action succeeded before it actually did.]"
+)
+
 
 def surface_note(committed, valid_tool_names=None):
     """The model-bound note for a committed surface (``""`` for the plain app window): barge-in
-    first, then the HUD read-the-window-below prior or the spoken-delegation contract."""
+    first, then the HUD read-the-window-below prior or the spoken-delegation contract, then the
+    chained voice-turn note when the admission carries ``voice_turn``."""
     notes = []
     if committed.get('interrupted'):
         from tools.tts_streaming import SPEECH_INTERRUPTED_NOTE
@@ -77,6 +92,8 @@ def surface_note(committed, valid_tool_names=None):
     render = _SURFACE_NOTES.get(committed.get('surface'))
     if render is not None:
         notes.append(render(committed, valid_tool_names))
+    if committed.get('voice_turn'):
+        notes.append(VOICE_TURN_NOTE)
     return '\n\n'.join(note for note in notes if note)
 
 
